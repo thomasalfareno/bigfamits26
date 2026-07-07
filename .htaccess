@@ -1,0 +1,101 @@
+RewriteEngine On
+
+# Disable directory listing
+Options -Indexes
+
+# Block sensitive standard files and folders
+RewriteRule ^(\.git|\.gitignore|\.env|composer\.json|package\.json|package-lock\.json)$ - [F,L]
+
+# Prevent common exploit attempts in Query String (SQL Injection & XSS scanning)
+RewriteCond %{QUERY_STRING} (<|%3C).*script.*(>|%3E) [NC,OR]
+RewriteCond %{QUERY_STRING} GLOBALS(=|\[|\%) [OR]
+RewriteCond %{QUERY_STRING} _REQUEST(=|\[|\%) [OR]
+RewriteCond %{QUERY_STRING} base64_(encode|decode) [NC,OR]
+RewriteCond %{QUERY_STRING} (union|select|insert|update|delete|drop)\s+(all|select|from|into|where|table) [NC]
+RewriteRule ^(.*)$ - [F,L]
+
+# Redirect direct *.php requests to clean URLs (skip API files & POST requests)
+RewriteCond %{REQUEST_METHOD} !POST
+RewriteCond %{THE_REQUEST} \s/+(.*?)\.php[\s?] [NC]
+RewriteCond %{REQUEST_URI} !error\.php
+RewriteCond %{REQUEST_URI} !api_ [NC]
+RewriteRule ^(.*)\.php$ /%1 [R=302,L]
+
+# Clean URL rewrites (internally map to PHP)
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME}\.php -f
+RewriteRule ^(.*?)/?$ $1.php [L]
+
+# Redirect folder index paths cleanly
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteCond %{REQUEST_FILENAME}/index.php -f
+RewriteRule ^(.*?)/?$ $1/index.php [L]
+
+# Fallback for completely invalid routes to closest route
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME}\.php !-f
+RewriteRule ^(.*)$ error.php?route=$1 [L,QSA]
+
+# Block access to database.sql, backups, config files, git directories, rate limit files, and installer tests
+RewriteRule ^database\.sql$ - [F,L]
+RewriteRule ^config/ - [F,L]
+RewriteRule ^uploads/rate_limit/ - [F,L]
+RewriteRule ^installer/test_ - [F,L]
+RewriteRule ^\.git - [F,L]
+RewriteRule \.(sql|bak|cfg|ini)$ - [F,L]
+
+# Block direct access to archive files at the root level or in other directories (allow in uploads)
+RewriteCond %{REQUEST_URI} !^/uploads/ [NC]
+RewriteRule \.(zip|rar|tar|gz|7z)$ - [F,L]
+
+# ===== BROWSER CACHING FOR STATIC ASSETS (Performance Boost) =====
+<IfModule mod_expires.c>
+    ExpiresActive On
+    # Images: cache for 30 days
+    ExpiresByType image/jpeg "access plus 30 days"
+    ExpiresByType image/png "access plus 30 days"
+    ExpiresByType image/gif "access plus 30 days"
+    ExpiresByType image/webp "access plus 30 days"
+    ExpiresByType image/svg+xml "access plus 30 days"
+    ExpiresByType image/x-icon "access plus 30 days"
+    # CSS & JavaScript: cache for 7 days
+    ExpiresByType text/css "access plus 7 days"
+    ExpiresByType application/javascript "access plus 7 days"
+    ExpiresByType text/javascript "access plus 7 days"
+    # Fonts: cache for 30 days
+    ExpiresByType font/woff2 "access plus 30 days"
+    ExpiresByType font/woff "access plus 30 days"
+    ExpiresByType font/ttf "access plus 30 days"
+    ExpiresByType application/font-woff2 "access plus 30 days"
+    # PDF/Documents: cache for 7 days
+    ExpiresByType application/pdf "access plus 7 days"
+    # Audio/Video: cache for 14 days
+    ExpiresByType audio/mpeg "access plus 14 days"
+    ExpiresByType video/mp4 "access plus 14 days"
+    ExpiresByType video/webm "access plus 14 days"
+</IfModule>
+
+# Enable GZIP compression for text resources
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/css text/javascript application/javascript application/json text/xml application/xml
+</IfModule>
+
+# Configure Entity Tags (ETags) for static content
+FileETag MTime Size
+
+# Cache-Control headers for static files
+<IfModule mod_headers.c>
+    <FilesMatch "\.(css|js|jpg|jpeg|png|gif|webp|ico|svg|woff2|woff|ttf)$">
+        Header set Cache-Control "public, max-age=604800, immutable"
+    </FilesMatch>
+    <FilesMatch "\.(css|js|xml|gz|html)$">
+        Header append Vary Accept-Encoding
+    </FilesMatch>
+    # Never cache PHP/HTML pages
+    <FilesMatch "\.(php|html)$">
+        Header set Cache-Control "no-cache, no-store, must-revalidate"
+        Header set Pragma "no-cache"
+        Header set Expires "0"
+    </FilesMatch>
+</IfModule>

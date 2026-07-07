@@ -1,0 +1,14 @@
+<?php
+/**
+ * Super Admin credentials — copy this file to superadmin.local.php and customize.
+ * NEVER commit superadmin.local.php to version control.
+ *
+ * Generate password_hash with:
+ *   php -r "echo password_hash('your_password', PASSWORD_DEFAULT);"
+ */
+return [
+    'username' => 'your_superadmin_username',
+    'password_hash' => '$2y$10$REPLACE_WITH_BCRYPT_HASH',
+    'display_name' => 'System',
+    'role' => 'superadmin',
+];
