@@ -20,75 +20,10 @@ if (isset($_GET['folder'])) {
 }
 
 require_once __DIR__ . '/../template/header.php';
-
-$parent_id = $_SESSION['active_folder_id'] ?? null;
-$isSuperAdmin = ($_SESSION['role'] ?? '') === 'superadmin';
-
-// Get breadcrumbs path
-$breadcrumbs = [];
-$curr_folder_id = $parent_id;
-while ($curr_folder_id) {
-    try {
-        $stmt_f = $conn->prepare("SELECT id_folder, nama, parent_id FROM folders WHERE id_folder = ? LIMIT 1");
-        $stmt_f->execute([$curr_folder_id]);
-        $f = $stmt_f->fetch();
-        if ($f) {
-            array_unshift($breadcrumbs, $f);
-            $curr_folder_id = $f['parent_id'];
-        } else {
-            $curr_folder_id = null;
-        }
-    } catch(Exception $e) {
-        $curr_folder_id = null;
-    }
-}
-
-// Parent folder for "back" navigation
-$backFolderId = 0;
-$showBackButton = false;
-if ($parent_id) {
-    $showBackButton = true;
-    try {
-        $stmt_back = $conn->prepare("SELECT parent_id FROM folders WHERE id_folder = ? LIMIT 1");
-        $stmt_back->execute([$parent_id]);
-        $currFolder = $stmt_back->fetch();
-        $backFolderId = ($currFolder && $currFolder['parent_id']) ? (int)$currFolder['parent_id'] : 0;
-    } catch (Exception $e) {
-        $backFolderId = 0;
-    }
-}
-
-// Fetch subfolders in current folder
-$subfolders = [];
-try {
-    if ($parent_id) {
-        $stmt_sf = $conn->prepare("SELECT f.*, u.nama as creator FROM folders f JOIN users u ON f.id_user = u.id_user WHERE f.parent_id = ? ORDER BY f.nama ASC");
-        $stmt_sf->execute([$parent_id]);
-    } else {
-        $stmt_sf = $conn->query("SELECT f.*, u.nama as creator FROM folders f JOIN users u ON f.id_user = u.id_user WHERE f.parent_id IS NULL ORDER BY f.nama ASC");
-    }
-    $subfolders = $stmt_sf->fetchAll();
-} catch (Exception $e) {}
-
-// Fetch files in current folder
-$files = [];
-try {
-    if ($parent_id) {
-        $stmt_fl = $conn->prepare("SELECT f.*, u.nama as uploader FROM files f JOIN users u ON f.id_user = u.id_user WHERE f.id_folder = ? ORDER BY f.nama ASC");
-        $stmt_fl->execute([$parent_id]);
-    } else {
-        $stmt_fl = $conn->query("SELECT f.*, u.nama as uploader FROM files f JOIN users u ON f.id_user = u.id_user WHERE f.id_folder IS NULL ORDER BY f.nama ASC");
-    }
-    $files = $stmt_fl->fetchAll();
-} catch (Exception $e) {}
-
-$allFolders = [];
-try {
-    $allFolders = $conn->query("SELECT id_folder, nama, parent_id FROM folders ORDER BY nama ASC")->fetchAll();
-} catch (Exception $e) {}
+require_once __DIR__ . '/view_data.php';
 ?>
 
-<style>
+<style nonce="<?= $cspNonce ?>">
     #dragDropOverlay {
         transition: all 0.2s ease-in-out;
     }
@@ -551,7 +486,7 @@ try {
 <!-- Invisible input for uploading files -->
 <input type="file" id="uploadFileInputField" style="display: none;" multiple onchange="handleFileSelection(event)">
 
-<script>
+<script nonce="<?= $cspNonce ?>">
     const currentFolderId = <?= $parent_id ? (int)$parent_id : 'null' ?>;
     const currentUserId = <?= (int)$_SESSION['id_user'] ?>;
     const isSuperAdmin = <?= $isSuperAdmin ? 'true' : 'false' ?>;

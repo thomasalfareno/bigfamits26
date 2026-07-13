@@ -183,19 +183,20 @@ class SqlMigrationValidator
     /**
      * Verify superadmin password for migration on live system.
      */
-    public static function verifySuperAdminPassword(string $password): bool
+    public static function verifySuperAdminPassword(PDO $conn, int $userId, string $password): bool
     {
-        $password = trim($password);
         if ($password === '') {
             return false;
         }
 
-        $config = getSuperAdminConfig();
-        if (empty($config['password_hash'])) {
+        $stmt = $conn->prepare("SELECT password, role FROM users WHERE id_user = ? LIMIT 1");
+        $stmt->execute([$userId]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$user || ($user['role'] ?? '') !== 'superadmin') {
             return false;
         }
 
-        return password_verify($password, $config['password_hash']);
+        return password_verify($password, $user['password'] ?? '');
     }
 
     /**
@@ -294,7 +295,7 @@ class SqlMigrationValidator
 /**
  * Sanitize user row values during import — prevent privilege escalation.
  */
-function sanitizeMigrationUserRow(array $columns, array $values): ?array
+function sanitizeMigrationUserRow(array $columns, array $values, array $protectedUsernames = []): ?array
 {
     $data = array_combine($columns, $values);
     if ($data === false) {
@@ -308,7 +309,8 @@ function sanitizeMigrationUserRow(array $columns, array $values): ?array
         return null;
     }
 
-    if (isReservedSuperAdminUsername($username)) {
+    $protectedUsernames = array_map('strtolower', $protectedUsernames);
+    if (isReservedSuperAdminUsername($username) || in_array(strtolower($username), $protectedUsernames, true)) {
         return null;
     }
 
@@ -365,7 +367,7 @@ function quoteMigrationSqlValue(?string $value): string
 }
 
 /**
- * Normalize password + plain_password on each imported user row (same rules as admin/register).
+ * Normalize imported credentials to a one-way hash and clear plain_password.
  */
 function applyMigrationUserCredentialNormalization(array $columns, array $values): array
 {
@@ -398,14 +400,6 @@ function applyMigrationUserCredentialNormalization(array $columns, array $values
 }
 
 /**
- * Check if a value is already AES-encrypted via encryptUserData().
- */
-function isEncryptedUserData(?string $data): bool
-{
-    return isPlainPasswordEncrypted($data);
-}
-
-/**
  * Check if a string looks like a bcrypt hash.
  */
 function looksLikeBcryptHash(string $hash): bool
@@ -414,86 +408,34 @@ function looksLikeBcryptHash(string $hash): bool
 }
 
 /**
- * Normalize password + plain_password after migration — same rules as admin/register.
- *
- * Priority for plain-text source:
- * 1. plain_password column (if plain text, not yet encrypted)
- * 2. password column (if not bcrypt — legacy plain-text storage)
- * 3. password column (if AES-encrypted legacy format — decrypt temporarily)
- *
- * If only bcrypt exists with no plain source, password stays bcrypt and plain_password stays NULL
- * until the user logs in successfully (backfillPlainPasswordAfterLogin).
+ * Existing bcrypt hashes are preserved. Legacy plain text is hashed once and
+ * plain_password is always discarded.
  */
 function normalizeMigratedUserCredentials(string $password, ?string $plainPassword, string $role): array
 {
     $password = trim($password);
     $plainPassword = $plainPassword !== null ? trim($plainPassword) : '';
 
-    if (!shouldStorePlainPassword($role)) {
-        if ($password !== '' && !looksLikeBcryptHash($password)) {
-            return [
-                'password' => password_hash($password, PASSWORD_DEFAULT),
-                'plain_password' => null,
-                'changed' => true,
-            ];
-        }
+    if (looksLikeBcryptHash($password)) {
         return [
             'password' => $password,
             'plain_password' => null,
-            'changed' => false,
+            'changed' => $plainPassword !== '',
         ];
     }
 
-    $plainSource = null;
-
-    if ($plainPassword !== '' && !isEncryptedUserData($plainPassword)) {
-        $plainSource = $plainPassword;
-    } elseif ($password !== '' && !looksLikeBcryptHash($password)) {
-        $plainSource = $password;
-    } elseif ($password !== '' && isEncryptedUserData($password)) {
-        $decryptedPassword = decryptUserData($password);
-        if ($decryptedPassword !== null && $decryptedPassword !== '' && $decryptedPassword !== $password) {
-            $plainSource = $decryptedPassword;
-        }
-    }
-
-    if ($plainSource === null) {
-        if ($plainPassword !== '' && isEncryptedUserData($plainPassword)) {
-            return [
-                'password' => $password,
-                'plain_password' => $plainPassword,
-                'changed' => false,
-            ];
-        }
-
-        if ($plainPassword !== '' && !isEncryptedUserData($plainPassword)) {
-            $encryptedPlain = encryptUserData($plainPassword);
-            return [
-                'password' => $password,
-                'plain_password' => $encryptedPlain,
-                'changed' => true,
-            ];
-        }
-
+    $plainSource = $password !== '' ? $password : $plainPassword;
+    if ($plainSource === '') {
         return [
-            'password' => $password,
+            'password' => '',
             'plain_password' => null,
-            'changed' => false,
+            'changed' => $plainPassword !== '',
         ];
     }
-
-    if (looksLikeBcryptHash($password) && password_verify($plainSource, $password)) {
-        $hashed = $password;
-    } else {
-        $hashed = password_hash($plainSource, PASSWORD_DEFAULT);
-    }
-
-    $encryptedPlain = encryptUserData($plainSource);
-    $changed = ($hashed !== $password) || ($encryptedPlain !== $plainPassword);
 
     return [
-        'password' => $hashed,
-        'plain_password' => $encryptedPlain,
-        'changed' => $changed,
+        'password' => password_hash($plainSource, PASSWORD_DEFAULT),
+        'plain_password' => null,
+        'changed' => true,
     ];
 }

@@ -1,7 +1,7 @@
     </main><!-- /.main-content -->
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
-    <script>
+    <script nonce="<?= $cspNonce ?>" src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+    <script nonce="<?= $cspNonce ?>">
         // Sidebar toggle
         const sidebar = document.getElementById('sidebar');
         const overlay = document.getElementById('sidebarOverlay');
@@ -238,6 +238,6 @@
             }
         })();
     </script>
-    <script src="<?= $base_url ?>/assets/js/tutorial.js"></script>
+    <script nonce="<?= $cspNonce ?>" src="<?= $base_url ?>/assets/js/tutorial.js?v=<?= assetVersion(__DIR__ . '/../assets/js/tutorial.js') ?>"></script>
 </body>
 </html>

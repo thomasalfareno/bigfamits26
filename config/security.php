@@ -258,7 +258,74 @@ function getNotesUploadDir() {
     return __DIR__ . '/../uploads/notes/';
 }
 
-function buildDocxImageRelationshipMap(ZipArchive $zip) {
+class DocxArchiveReader {
+    private $archive = null;
+    private bool $usesZipArchive = false;
+
+    public function open(string $path): bool {
+        if (class_exists('ZipArchive')) {
+            $zip = new ZipArchive();
+            if ($zip->open($path) === true) {
+                $this->archive = $zip;
+                $this->usesZipArchive = true;
+                return true;
+            }
+        }
+
+        if (class_exists('PharData') && Phar::canCompress(Phar::ZIP)) {
+            try {
+                $this->archive = new PharData($path);
+                return true;
+            } catch (Throwable $e) {
+                error_log('[BigFamITS26] DOCX fallback open failed: ' . $e->getMessage());
+            }
+        }
+
+        return false;
+    }
+
+    public function getFromName(string $name) {
+        $name = str_replace('\\', '/', $name);
+        if ($name === '' || str_contains($name, '../') || str_starts_with($name, '/')) {
+            return false;
+        }
+
+        if ($this->usesZipArchive) {
+            $stat = $this->archive->statName($name);
+            if ($stat === false || ($stat['size'] ?? 0) > 25 * 1024 * 1024) {
+                return false;
+            }
+            return $this->archive->getFromName($name);
+        }
+
+        try {
+            if (!isset($this->archive[$name])) {
+                return false;
+            }
+            $entry = $this->archive[$name];
+            if ($entry->getSize() > 25 * 1024 * 1024) {
+                return false;
+            }
+            return $entry->getContent();
+        } catch (Throwable $e) {
+            return false;
+        }
+    }
+
+    public function close(): void {
+        if ($this->usesZipArchive && $this->archive) {
+            $this->archive->close();
+        }
+        $this->archive = null;
+    }
+}
+
+function isDocxArchiveSupported(): bool {
+    return class_exists('ZipArchive')
+        || (class_exists('PharData') && Phar::canCompress(Phar::ZIP));
+}
+
+function buildDocxImageRelationshipMap(DocxArchiveReader $zip) {
     $relsXml = $zip->getFromName('word/_rels/document.xml.rels');
     $map = [];
     if ($relsXml === false || $relsXml === '') {
@@ -336,7 +403,7 @@ function getDocxEmbedIdFromRun(DOMXPath $xpath, DOMNode $run) {
     return null;
 }
 
-function renderDocxEmbeddedImage(ZipArchive $zip, $embedId, array $relMap, array $options) {
+function renderDocxEmbeddedImage(DocxArchiveReader $zip, $embedId, array $relMap, array $options) {
     if ($embedId === null || $embedId === '' || !isset($relMap[$embedId])) {
         return '';
     }
@@ -391,12 +458,12 @@ function renderDocxEmbeddedImage(ZipArchive $zip, $embedId, array $relMap, array
  *   save_dir, url_base — required when images=save
  */
 function convertDocxToHtml($path, array $options = []) {
-    if (!class_exists('ZipArchive')) {
+    if (!isDocxArchiveSupported()) {
         return null;
     }
 
-    $zip = new ZipArchive();
-    if ($zip->open($path) !== true) {
+    $zip = new DocxArchiveReader();
+    if (!$zip->open($path)) {
         return null;
     }
 
@@ -534,12 +601,12 @@ function canImportDriveFileToNotes($filename) {
 }
 
 function extractDocxDocumentTitle($path, $fallback = 'Catatan Impor') {
-    if (!class_exists('ZipArchive')) {
+    if (!isDocxArchiveSupported()) {
         return $fallback;
     }
 
-    $zip = new ZipArchive();
-    if ($zip->open($path) !== true) {
+    $zip = new DocxArchiveReader();
+    if (!$zip->open($path)) {
         return $fallback;
     }
 
@@ -790,10 +857,24 @@ function generateSafeFilename($originalName, $prefix = 'file') {
     return $prefix . '_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
 }
 
+function assetVersion(string $absolutePath): string {
+    $mtime = @filemtime($absolutePath);
+    return $mtime !== false ? (string)$mtime : '1';
+}
+
+function getCspNonce(): string {
+    static $nonce = null;
+    if ($nonce === null) {
+        $nonce = base64_encode(random_bytes(18));
+    }
+    return $nonce;
+}
+
 /**
  * Set security headers for all responses.
  */
 function setSecurityHeaders() {
+    $nonce = getCspNonce();
     header('X-Content-Type-Options: nosniff');
     header('X-Frame-Options: SAMEORIGIN');
     header('X-XSS-Protection: 1; mode=block');
@@ -803,7 +884,7 @@ function setSecurityHeaders() {
     
     // Content Security Policy — allow inline styles/scripts (needed for the app)
     // but block external script sources except trusted CDNs
-    header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://cdn.tiny.cloud https://*.tinymce.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.tiny.cloud https://cdn.jsdelivr.net https://*.tinymce.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; img-src 'self' data: blob: https://ui-avatars.com https://sp.tinymce.com https://*.tinymce.com https://cdn.tiny.cloud https://cdn.jsdelivr.net; connect-src 'self' https://cdn.jsdelivr.net https://cdn.tiny.cloud https://sp.tinymce.com https://*.tinymce.com; frame-src 'self' data: blob:; object-src 'none'; base-uri 'self';");
+    header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{$nonce}' 'strict-dynamic' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://cdn.tiny.cloud https://*.tinymce.com; script-src-attr 'unsafe-inline'; style-src-elem 'self' 'nonce-{$nonce}' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.tiny.cloud https://cdn.jsdelivr.net https://*.tinymce.com; style-src-attr 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; img-src 'self' data: blob: https://ui-avatars.com https://sp.tinymce.com https://*.tinymce.com https://cdn.tiny.cloud https://cdn.jsdelivr.net; connect-src 'self' https://cdn.jsdelivr.net https://cdn.tiny.cloud https://sp.tinymce.com https://*.tinymce.com; frame-src 'self' data: blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self';");
 }
 
 /**
@@ -883,23 +964,24 @@ function safeErrorMessage($exception, $genericMessage = 'Terjadi kesalahan pada 
 }
 
 /**
- * Finalize default accounts after database installation.
- * Writes superadmin.local.php and syncs hashed passwords in the database.
+ * Finalize privileged accounts after database installation.
+ * The database is the only authentication source.
  */
-function finalizeInstallationAccounts(PDO $conn, $superAdminUsername, $superAdminPassword, $adminPassword = 'admin123') {
+function generateInitialPassword(): string {
+    return bin2hex(random_bytes(12));
+}
+
+/**
+ * Shared password policy for newly created or changed credentials.
+ */
+function isStrongPassword($password): bool {
+    return is_string($password)
+        && strlen($password) >= 8;
+}
+
+function finalizeInstallationAccounts(PDO $conn, $superAdminUsername, $superAdminPassword, $adminUsername, $adminPassword) {
     $saHash = password_hash($superAdminPassword, PASSWORD_DEFAULT);
     $adminHash = password_hash($adminPassword, PASSWORD_DEFAULT);
-
-    $localFile = __DIR__ . '/superadmin.local.php';
-    $localContent = "<?php\n"
-        . "/**\n * Super Admin credentials — generated at install. Do not commit.\n */\n"
-        . "return [\n"
-        . "    'username' => " . var_export($superAdminUsername, true) . ",\n"
-        . "    'password_hash' => " . var_export($saHash, true) . ",\n"
-        . "    'display_name' => 'System',\n"
-        . "    'role' => 'superadmin',\n"
-        . "];\n";
-    file_put_contents($localFile, $localContent);
 
     $stmt = $conn->prepare("SELECT id_user FROM users WHERE username = ? LIMIT 1");
     $stmt->execute([$superAdminUsername]);
@@ -913,66 +995,26 @@ function finalizeInstallationAccounts(PDO $conn, $superAdminUsername, $superAdmi
 
     $conn->exec("UPDATE users SET plain_password = NULL WHERE role = 'superadmin'");
 
-    $stmtAdmin = $conn->prepare("SELECT id_user FROM users WHERE username = 'admin' LIMIT 1");
-    $stmtAdmin->execute();
+    $stmtAdmin = $conn->prepare("SELECT id_user FROM users WHERE username = ? LIMIT 1");
+    $stmtAdmin->execute([$adminUsername]);
     if ($stmtAdmin->fetch()) {
-        $conn->prepare("UPDATE users SET password = ? WHERE username = 'admin'")->execute([$adminHash]);
+        $conn->prepare("UPDATE users SET password = ?, role = 'admin', plain_password = NULL WHERE username = ?")
+            ->execute([$adminHash, $adminUsername]);
     } else {
-        $conn->prepare("INSERT INTO users (nama, username, password, role) VALUES ('Administrator', 'admin', ?, 'admin')")
-            ->execute([$adminHash]);
+        $conn->prepare("INSERT INTO users (nama, username, password, plain_password, role) VALUES ('Administrator', ?, ?, NULL, 'admin')")
+            ->execute([$adminUsername, $adminHash]);
     }
 }
 
 /**
- * Super Admin configuration.
- * Credentials are loaded from config/superadmin.local.php (not committed to repo).
- * Copy superadmin.local.php.example and customize for your deployment.
- */
-function getSuperAdminConfig() {
-    static $config = null;
-    if ($config !== null) {
-        return $config;
-    }
-
-    $localFile = __DIR__ . '/superadmin.local.php';
-    if (file_exists($localFile)) {
-        $loaded = require $localFile;
-        if (is_array($loaded) && !empty($loaded['username']) && !empty($loaded['password_hash'])) {
-            $config = $loaded;
-            return $config;
-        }
-    }
-
-    $config = [
-        'username' => '',
-        'password_hash' => '',
-        'display_name' => 'System',
-        'role' => 'superadmin',
-    ];
-    return $config;
-}
-
-/**
- * Usernames reserved for the protected super admin account.
+ * Legacy system usernames remain unavailable for public registration.
  */
 function getReservedSuperAdminUsernames() {
-    $saConfig = getSuperAdminConfig();
-    $reserved = ['bigfamits26'];
-    if (!empty($saConfig['username'])) {
-        $reserved[] = strtolower($saConfig['username']);
-    }
-    return array_unique($reserved);
+    return ['bigfamits26', 'addmbigfamits26'];
 }
 
 function isReservedSuperAdminUsername($username) {
     return in_array(strtolower(trim($username)), getReservedSuperAdminUsernames(), true);
-}
-
-/**
- * Plain-text password storage is disabled for super admin accounts.
- */
-function shouldStorePlainPassword($role) {
-    return ($role ?? '') !== 'superadmin';
 }
 
 /**
@@ -1071,83 +1113,4 @@ function requirePostMethod() {
     }
 }
 
-define('DB_ENCRYPTION_KEY', 'a8c14f9d6571520281b95ff883df1e5927c6f0923f798e21bc56338abffc46a8');
-
-/**
- * Encrypt a plain-text password using AES-256-CBC.
- */
-function encryptUserData($data) {
-    if (empty($data)) return null;
-    $key = hash('sha256', DB_ENCRYPTION_KEY);
-    $iv_length = openssl_cipher_iv_length('aes-256-cbc');
-    $iv = openssl_random_pseudo_bytes($iv_length);
-    $encrypted = openssl_encrypt($data, 'aes-256-cbc', $key, 0, $iv);
-    return base64_encode($iv . '::' . $encrypted);
-}
-
-/**
- * Decrypt a ciphertext back into plain text.
- * Falls back to returning the original data if it's not encrypted (legacy plain text).
- */
-function decryptUserData($data) {
-    if (empty($data)) return null;
-    $decoded = base64_decode($data, true);
-    if ($decoded === false) {
-        return $data; // Plain text / legacy
-    }
-    if (strpos($decoded, '::') === false) {
-        return $data; // Plain text / legacy
-    }
-    list($iv, $encrypted) = explode('::', $decoded, 2);
-    $key = hash('sha256', DB_ENCRYPTION_KEY);
-    $decrypted = openssl_decrypt($encrypted, 'aes-256-cbc', $key, 0, $iv);
-    if ($decrypted === false) {
-        return $data; // If decryption fails, return as-is
-    }
-    return $decrypted;
-}
-
-/**
- * Check whether plain_password is stored in AES format (encryptUserData).
- */
-function isPlainPasswordEncrypted(?string $data): bool
-{
-    if ($data === null || $data === '') {
-        return false;
-    }
-
-    $decoded = base64_decode($data, true);
-    if ($decoded === false || strpos($decoded, '::') === false) {
-        return false;
-    }
-
-    $decrypted = decryptUserData($data);
-    return $decrypted !== null && $decrypted !== '' && $decrypted !== $data;
-}
-
-/**
- * Backfill plain_password after successful login when only bcrypt exists.
- * Bcrypt cannot be reversed — the verified login password is the only safe source.
- */
-function backfillPlainPasswordAfterLogin(PDO $conn, array $user, string $verifiedPlainPassword): bool
-{
-    if (!shouldStorePlainPassword($user['role'] ?? '')) {
-        return false;
-    }
-
-    $current = $user['plain_password'] ?? null;
-    if (isPlainPasswordEncrypted($current)) {
-        return false;
-    }
-
-    $encrypted = encryptUserData($verifiedPlainPassword);
-    if ($encrypted === null) {
-        return false;
-    }
-
-    $conn->prepare('UPDATE users SET plain_password = ? WHERE id_user = ?')
-        ->execute([$encrypted, $user['id_user']]);
-
-    return true;
-}
 ?>

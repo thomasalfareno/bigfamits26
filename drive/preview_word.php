@@ -60,15 +60,16 @@ if (isDriveDocxExtension($ext)) {
         . '<p>Silakan unduh file dan buka dengan Microsoft Word atau LibreOffice.</p>';
 }
 
+$cspNonce = getCspNonce();
 header('Content-Type: text/html; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 header('Cache-Control: private, no-store, no-cache, must-revalidate');
 header('Pragma: no-cache');
-header("Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; script-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'; connect-src 'none'; media-src 'none'");
+header("Content-Security-Policy: default-src 'none'; style-src-elem 'nonce-{$cspNonce}'; style-src-attr 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; script-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'; connect-src 'none'; media-src 'none'");
 
 echo '<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
     . '<title>' . htmlspecialchars($title, ENT_QUOTES, 'UTF-8') . '</title>'
-    . '<style>'
+    . '<style nonce="' . htmlspecialchars($cspNonce, ENT_QUOTES, 'UTF-8') . '">'
     . 'body{margin:0;padding:1.25rem;font-family:"Segoe UI",Tahoma,Geneva,Verdana,sans-serif;line-height:1.65;color:#24292f;background:#fff;}'
     . 'h1{font-size:1.35rem;margin:0 0 1rem;padding-bottom:.5rem;border-bottom:1px solid #d0d7de;color:#2b579a;}'
     . 'h2{font-size:1.15rem;margin:1rem 0 .5rem;color:#2b579a;}'

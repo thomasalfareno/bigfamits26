@@ -3,6 +3,7 @@
 require_once __DIR__ . '/../config/security.php';
 initSecureSession();
 setSecurityHeaders();
+$cspNonce = htmlspecialchars(getCspNonce(), ENT_QUOTES, 'UTF-8');
 
 $base_url = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME']));
 $base_url = preg_replace('/(\/(auth|dashboard|notes|msg|drive|calendar|server|admin|installer))?$/i', '', $base_url);
@@ -32,8 +33,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'Deteksi otomatis bot. Pendaftaran ditolak.';
         } elseif (empty($nama) || empty($username) || empty($password)) {
             $error = 'Semua kolom wajib diisi!';
-        } elseif (strlen($password) < 6) {
-            $error = 'Password minimal 6 karakter.';
+        } elseif (!isStrongPassword($password)) {
+            $error = 'Password minimal 8 karakter.';
         } elseif (isReservedSuperAdminUsername($username)) {
             $error = 'Username ini tidak diperbolehkan.';
         } else {
@@ -52,9 +53,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $error = 'Nama Lengkap tersebut sudah terdaftar. Pilih nama lain.';
                 } else {
                     $hashed = password_hash($password, PASSWORD_DEFAULT);
-                    $encrypted_plain = encryptUserData($password);
-                    $stmt = $conn->prepare("INSERT INTO users (nama, username, password, plain_password, role) VALUES (?, ?, ?, ?, 'user')");
-                    $stmt->execute([$nama, $username, $hashed, $encrypted_plain]);
+                    $stmt = $conn->prepare("INSERT INTO users (nama, username, password, plain_password, role) VALUES (?, ?, ?, NULL, 'user')");
+                    $stmt->execute([$nama, $username, $hashed]);
                     
                     // Rotate CSRF token after registration
                     regenerateCsrfToken();
@@ -75,8 +75,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <title>Daftar — Big Family ITS 26</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="../assets/css/style.css?v=<?= time() ?>">
-    <style>
+    <link rel="stylesheet" href="../assets/css/style.css?v=<?= assetVersion(__DIR__ . '/../assets/css/style.css') ?>">
+    <style nonce="<?= $cspNonce ?>">
         html,body{overflow-x:hidden;max-width:100vw}
         .split-layout{display:flex;min-height:100vh;width:100%;overflow-x:hidden}
         @media(max-width:767px){.split-layout{flex-direction:column}}

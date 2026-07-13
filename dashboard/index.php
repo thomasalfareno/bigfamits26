@@ -250,7 +250,7 @@ try {
     </div>
 </div>
 
-<script>
+<script nonce="<?= $cspNonce ?>">
 (function() {
     const baseUrl = '<?= $base_url ?>';
     const isLoggedIn = <?= isset($_SESSION['id_user']) ? 'true' : 'false' ?>;

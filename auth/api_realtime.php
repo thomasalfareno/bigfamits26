@@ -129,12 +129,9 @@ try {
         
         $users = [];
         if ($isSuperAdmin) {
-            $stmt_u = $conn->prepare("SELECT id_user, nama, username, role, foto_profil, last_online, is_online, created_at, plain_password FROM users WHERE id_user != ? AND role != 'superadmin' ORDER BY role ASC, nama ASC");
+            $stmt_u = $conn->prepare("SELECT id_user, nama, username, role, foto_profil, last_online, is_online, created_at FROM users WHERE id_user != ? AND role != 'superadmin' ORDER BY role ASC, nama ASC");
             $stmt_u->execute([$_SESSION['id_user']]);
             $users = $stmt_u->fetchAll();
-            foreach ($users as &$u) {
-                $u['plain_password'] = decryptUserData($u['plain_password']);
-            }
         } else {
             $users = $conn->query("SELECT id_user, nama, role, foto_profil, last_online, is_online, created_at FROM users WHERE role != 'superadmin' ORDER BY role ASC, nama ASC")->fetchAll();
         }
@@ -143,7 +140,6 @@ try {
             $u['id_user'] = (int)$u['id_user'];
             $u['nama'] = sanitizeOutput($u['nama']);
             if (isset($u['username'])) $u['username'] = sanitizeOutput($u['username']);
-            if (isset($u['plain_password'])) $u['plain_password'] = $u['plain_password'] ? sanitizeOutput($u['plain_password']) : '(Belum Terisi/Hashed)';
             $u['role'] = sanitizeOutput($u['role']);
             $u['foto_profil'] = $u['foto_profil'] ? sanitizeOutput($u['foto_profil']) : '';
             $u['created_at'] = date('d M Y', strtotime($u['created_at']));

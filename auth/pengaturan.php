@@ -27,8 +27,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             } elseif (!empty($password_baru)) {
                 if (empty($password_lama)) {
                     $error = 'Password lama wajib diisi untuk mengubah password.';
-                } elseif (strlen($password_baru) < 6) {
-                    $error = 'Password baru minimal 6 karakter.';
+                } elseif (!isStrongPassword($password_baru)) {
+                    $error = 'Password baru minimal 8 karakter.';
                 } else {
                     $stmt_pw = $conn->prepare("SELECT password FROM users WHERE id_user = ? LIMIT 1");
                     $stmt_pw->execute([$_SESSION['id_user']]);
@@ -37,15 +37,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         $error = 'Password lama salah.';
                     } else {
                         $hashed = password_hash($password_baru, PASSWORD_DEFAULT);
-                        $storePlain = shouldStorePlainPassword($_SESSION['role'] ?? '');
-                        if ($storePlain) {
-                            $encrypted_plain = encryptUserData($password_baru);
-                            $stmt = $conn->prepare("UPDATE users SET nama = ?, password = ?, plain_password = ? WHERE id_user = ?");
-                            $stmt->execute([$nama, $hashed, $encrypted_plain, $_SESSION['id_user']]);
-                        } else {
-                            $stmt = $conn->prepare("UPDATE users SET nama = ?, password = ?, plain_password = NULL WHERE id_user = ?");
-                            $stmt->execute([$nama, $hashed, $_SESSION['id_user']]);
-                        }
+                        $stmt = $conn->prepare("UPDATE users SET nama = ?, password = ?, plain_password = NULL WHERE id_user = ?");
+                        $stmt->execute([$nama, $hashed, $_SESSION['id_user']]);
                         $_SESSION['nama'] = $nama;
                         $_SESSION['login_password_hash'] = $hashed;
                         $success = 'Profil dan password berhasil diperbarui!';
@@ -184,7 +177,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
                 <div class="form-group" style="margin-bottom: 1.5rem;">
                     <label style="color: var(--text-muted); display:block; font-size:0.85rem; margin-bottom:0.4rem">Password Baru (kosongkan jika tidak ingin diubah)</label>
-                    <input type="password" name="password_baru" class="form-control" placeholder="Masukkan password baru (minimal 6 karakter)" minlength="6" autocomplete="new-password">
+                    <input type="password" name="password_baru" class="form-control" placeholder="Minimal 8 karakter" minlength="8" autocomplete="new-password">
                 </div>
 
                 <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Simpan Perubahan</button>
@@ -292,8 +285,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 </form>
 
 <!-- Cropper JS and logic integration -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
-<script>
+<script nonce="<?= $cspNonce ?>" src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+<script nonce="<?= $cspNonce ?>">
     let cropper = null;
     const fileInput = document.getElementById('avatarFileInput');
     const modal = document.getElementById('cropperModal');
@@ -363,7 +356,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     });
 </script>
 
-<script>
+<script nonce="<?= $cspNonce ?>">
     // URL Hash Routing / Highlighting for sidebar links
     document.addEventListener('DOMContentLoaded', () => {
         function updateSidebarActiveTab() {
@@ -396,7 +389,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 </script>
 
 <?php if (($_SESSION['role'] ?? '') === 'superadmin'): ?>
-<script>
+<script nonce="<?= $cspNonce ?>">
     function clearGroupChat(mode) {
         const isPermanent = mode === 'permanent';
         Swal.fire({

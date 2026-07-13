@@ -2,6 +2,8 @@
 // installer/index.php
 require_once __DIR__ . '/../config/security.php';
 initSecureSession();
+setSecurityHeaders();
+$cspNonce = htmlspecialchars(getCspNonce(), ENT_QUOTES, 'UTF-8');
 require_once __DIR__ . '/../config/migration_security.php';
 
 $base_url = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME']));
@@ -13,12 +15,13 @@ $mode = $_GET['mode'] ?? $_POST['mode'] ?? '';
 $step = (int)($_GET['step'] ?? $_POST['step'] ?? 0);
 $error = '';
 $migrationResult = null;
+$activeDbConfig = null;
 $csrfToken = generateCsrfToken();
 
 if ($dbConfigured && $mode === '' && $step === 0) {
     $mode = 'migrate';
 }
-if ($dbConfigured && $mode !== 'migrate') {
+if ($dbConfigured && $mode !== 'migrate' && !($mode === 'install' && $step === 2)) {
     header("Location: " . $base_url . "/dashboard/");
     exit;
 }
@@ -26,6 +29,17 @@ if ($dbConfigured && $mode !== 'migrate') {
 if ($dbConfigured && $mode === 'migrate' && !SqlMigrationValidator::requireSuperAdminSession()) {
     header("Location: " . $base_url . "/auth/login?redirect=" . urlencode($base_url . "/installer/index?mode=migrate&step=2"));
     exit;
+}
+
+if ($dbConfigured && $mode === 'migrate') {
+    require_once __DIR__ . '/../config/database.php';
+    verifyActiveSession($conn, $base_url);
+    $activeDbConfig = [
+        'host' => $host,
+        'user' => $user,
+        'pass' => $pass,
+        'name' => $db,
+    ];
 }
 
 function writeDatabaseConfig(string $host, string $user, string $pass, string $name): void
@@ -63,9 +77,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($error)) {
         $user = $_POST['db_user'] ?? 'root';
         $pass = $_POST['db_pass'] ?? '';
         $name = preg_replace('/[^a-zA-Z0-9_]/', '', $_POST['db_name'] ?? 'bigfam_its26');
+        $superAdminUsername = trim($_POST['superadmin_username'] ?? '');
+        $superAdminPassword = $_POST['superadmin_password'] ?? '';
+        $superAdminPasswordConfirm = $_POST['superadmin_password_confirm'] ?? '';
+        $adminUsername = trim($_POST['admin_username'] ?? '');
+        $adminPassword = $_POST['admin_password'] ?? '';
+        $adminPasswordConfirm = $_POST['admin_password_confirm'] ?? '';
 
         if (empty($name)) {
             $error = "Nama database tidak valid.";
+        } elseif (!preg_match('/^[a-zA-Z0-9_.-]{3,50}$/', $superAdminUsername)) {
+            $error = 'Username Super Admin harus 3-50 karakter dan hanya boleh berisi huruf, angka, titik, garis bawah, atau tanda minus.';
+        } elseif (!preg_match('/^[a-zA-Z0-9_.-]{3,50}$/', $adminUsername)) {
+            $error = 'Username Admin harus 3-50 karakter dan hanya boleh berisi huruf, angka, titik, garis bawah, atau tanda minus.';
+        } elseif (strcasecmp($superAdminUsername, $adminUsername) === 0) {
+            $error = 'Username Admin dan Super Admin harus berbeda.';
+        } elseif (!isStrongPassword($superAdminPassword)) {
+            $error = 'Password Super Admin minimal 8 karakter.';
+        } elseif (!hash_equals($superAdminPassword, $superAdminPasswordConfirm)) {
+            $error = 'Konfirmasi password Super Admin tidak cocok.';
+        } elseif (!isStrongPassword($adminPassword)) {
+            $error = 'Password Admin minimal 8 karakter.';
+        } elseif (!hash_equals($adminPassword, $adminPasswordConfirm)) {
+            $error = 'Konfirmasi password Admin tidak cocok.';
+        } elseif (hash_equals($superAdminPassword, $adminPassword)) {
+            $error = 'Password Admin dan Super Admin harus berbeda.';
+        } elseif (isReservedSuperAdminUsername($adminUsername)) {
+            $error = 'Username Admin tersebut dicadangkan untuk Super Admin.';
         } else {
             try {
                 $conn = new PDO("mysql:host=$host;charset=utf8mb4", $user, $pass);
@@ -87,7 +125,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($error)) {
 
                 if (empty($error)) {
                     require_once __DIR__ . '/../config/security.php';
-                    finalizeInstallationAccounts($conn, 'addmbigfamits26', '#AddmBigFamITS26', 'admin123');
+                    finalizeInstallationAccounts($conn, $superAdminUsername, $superAdminPassword, $adminUsername, $adminPassword);
+                    $_SESSION['_install_credentials'] = [
+                        'superadmin_username' => $superAdminUsername,
+                        'admin_username' => $adminUsername,
+                    ];
                     writeDatabaseConfig($host, $user, $pass, $name);
                     ensureUploadDirs();
                     header("Location: " . $base_url . "/installer/index?mode=install&step=2");
@@ -129,7 +171,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($error)) {
             $error = 'Terlalu banyak percobaan migrasi. Coba lagi dalam 1 jam.';
         } elseif (empty($_POST['confirm_backup'])) {
             $error = 'Centang konfirmasi bahwa file SQL berasal dari backup resmi.';
-        } elseif ($dbConfigured && !SqlMigrationValidator::verifySuperAdminPassword($_POST['superadmin_password'] ?? '')) {
+        } elseif ($dbConfigured && !SqlMigrationValidator::verifySuperAdminPassword(
+            $conn,
+            (int)($_SESSION['id_user'] ?? 0),
+            $_POST['superadmin_password'] ?? ''
+        )) {
             $error = 'Password Super Admin salah. Migrasi ditolak.';
         } elseif (empty($_FILES['sql_file']['tmp_name'])) {
             $error = 'File SQL wajib diupload.';
@@ -140,9 +186,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($error)) {
             } else {
                 $db = $_SESSION['_migrate_db'] ?? null;
                 if (!$db) {
-                    if ($dbConfigured) {
-                        require_once __DIR__ . '/../config/database.php';
-                        $db = ['host' => $host, 'user' => $user, 'pass' => $pass, 'name' => $db];
+                    if ($dbConfigured && $activeDbConfig) {
+                        $db = $activeDbConfig;
                     } else {
                         $error = 'Sesi migrasi kadaluarsa. Ulangi konfigurasi database.';
                     }
@@ -160,7 +205,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($error)) {
 
                         $sqlContent = file_get_contents($_FILES['sql_file']['tmp_name']);
                         require_once __DIR__ . '/../config/smart_migration.php';
-                        $migrator = new SmartMigration($conn);
+                        $protectedUsernames = [];
+                        if ($dbConfigured) {
+                            $stmtProtected = $conn->query("SELECT username FROM users WHERE role IN ('admin', 'superadmin')");
+                            $protectedUsernames = $stmtProtected->fetchAll(PDO::FETCH_COLUMN);
+                        }
+                        $migrator = new SmartMigration($conn, $protectedUsernames);
                         $migrationResult = $migrator->run($sqlContent);
 
                         if (empty($migrationResult['success'])) {
@@ -171,7 +221,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($error)) {
                             $error = implode(' ', $errMsgs) ?: 'File SQL ditolak oleh sistem keamanan.';
                         } else {
                             $_SESSION['_migrate_result'] = $migrationResult;
-                            finalizeInstallationAccounts($conn, 'addmbigfamits26', '#AddmBigFamITS26', 'admin123');
+                            if (!$dbConfigured) {
+                                $superAdminPassword = generateInitialPassword();
+                                $adminPassword = generateInitialPassword();
+                                finalizeInstallationAccounts($conn, 'addmbigfamits26', $superAdminPassword, 'admin', $adminPassword);
+                                $_SESSION['_migration_credentials'] = [
+                                    'superadmin_username' => 'addmbigfamits26',
+                                    'superadmin_password' => $superAdminPassword,
+                                    'admin_username' => 'admin',
+                                    'admin_password' => $adminPassword,
+                                ];
+                            }
 
                             if (!$dbConfigured) {
                                 writeDatabaseConfig($db['host'], $db['user'], $db['pass'], $db['name']);
@@ -213,6 +273,10 @@ if ($mode === 'migrate' && $step === 0) {
 if ($mode === 'install' && $step === 0) {
     $step = 1;
 }
+
+$installCredentials = $_SESSION['_install_credentials'] ?? null;
+$migrationCredentials = $_SESSION['_migration_credentials'] ?? null;
+unset($_SESSION['_install_credentials'], $_SESSION['_migration_credentials']);
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -221,7 +285,7 @@ if ($mode === 'install' && $step === 0) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Installer — Big Family ITS 26</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
+    <style nonce="<?= $cspNonce ?>">
         *{margin:0;padding:0;box-sizing:border-box}
         body{font-family:'Inter',sans-serif;background:#0d1117;color:#c9d1d9;display:flex;justify-content:center;align-items:center;min-height:100vh;position:relative;padding:1.5rem}
         body::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 30% 20%,rgba(88,166,255,.1),transparent 50%),radial-gradient(circle at 70% 80%,rgba(240,171,0,.06),transparent 50%);pointer-events:none}
@@ -319,6 +383,33 @@ if ($mode === 'install' && $step === 0) {
                 <label>Database Name</label>
                 <input type="text" name="db_name" value="bigfam_its26" required>
             </div>
+            <div class="form-group">
+                <label>Username Super Admin</label>
+                <input type="text" name="superadmin_username" value="<?= htmlspecialchars($_POST['superadmin_username'] ?? '') ?>" minlength="3" maxlength="50" autocomplete="username" required>
+                <div class="hint">Gunakan username khusus yang tidak mudah ditebak.</div>
+            </div>
+            <div class="form-group">
+                <label>Password Super Admin</label>
+                <input type="password" name="superadmin_password" minlength="8" autocomplete="new-password" required>
+                <div class="hint">Minimal 8 karakter.</div>
+            </div>
+            <div class="form-group">
+                <label>Konfirmasi Password Super Admin</label>
+                <input type="password" name="superadmin_password_confirm" minlength="8" autocomplete="new-password" required>
+            </div>
+            <div class="form-group">
+                <label>Username Admin</label>
+                <input type="text" name="admin_username" value="<?= htmlspecialchars($_POST['admin_username'] ?? '') ?>" minlength="3" maxlength="50" autocomplete="username" required>
+            </div>
+            <div class="form-group">
+                <label>Password Admin</label>
+                <input type="password" name="admin_password" minlength="8" autocomplete="new-password" required>
+                <div class="hint">Harus berbeda dari password Super Admin.</div>
+            </div>
+            <div class="form-group">
+                <label>Konfirmasi Password Admin</label>
+                <input type="password" name="admin_password_confirm" minlength="8" autocomplete="new-password" required>
+            </div>
             <button type="submit" class="btn btn-primary">Install Database</button>
         </form>
         <a href="<?= $base_url ?>/installer/" class="back-link">← Kembali ke menu</a>
@@ -328,8 +419,13 @@ if ($mode === 'install' && $step === 0) {
             <strong>Instalasi Berhasil!</strong><br>
             Database dan tabel berhasil dibuat. File <code>config/database.php</code> telah disimpan otomatis.
         </div>
-        <p class="subtitle">Login sebagai <strong>Super Admin</strong>:<br><strong>Username:</strong> addmbigfamits26<br><strong>Password:</strong> #AddmBigFamITS26</p>
-        <p class="subtitle" style="margin-top:.75rem;font-size:.8rem">Akun admin: <strong>admin</strong> / <strong>admin123</strong></p>
+        <?php if ($installCredentials): ?>
+        <p class="subtitle">Super Admin: <strong><?= htmlspecialchars($installCredentials['superadmin_username']) ?></strong></p>
+        <p class="subtitle" style="margin-top:.75rem;font-size:.8rem">Admin: <strong><?= htmlspecialchars($installCredentials['admin_username']) ?></strong></p>
+        <p style="color:#f0ab00;font-size:.78rem;text-align:center;margin-bottom:1rem">Gunakan password yang Anda masukkan pada langkah sebelumnya.</p>
+        <?php else: ?>
+        <p class="subtitle">Kredensial instalasi sudah tidak tersedia. Atur ulang password melalui database atau jalankan instalasi bersih.</p>
+        <?php endif; ?>
         <p style="color:#f85149;font-size:.78rem;text-align:center;margin-bottom:1rem"><strong>Keamanan:</strong> Hapus folder <code>installer</code> setelah login pertama.</p>
         <a href="<?= $base_url ?>/auth/login" class="btn btn-primary">Masuk ke Aplikasi</a>
 
@@ -437,7 +533,11 @@ if ($mode === 'install' && $step === 0) {
             </div>
         <?php endif; ?>
 
-        <p class="subtitle" style="margin-top:1.25rem">Super Admin: <strong>addmbigfamits26</strong> / <strong>#AddmBigFamITS26</strong></p>
+        <?php if ($migrationCredentials): ?>
+        <p class="subtitle" style="margin-top:1.25rem">Super Admin: <strong><?= htmlspecialchars($migrationCredentials['superadmin_username']) ?></strong> / <code><?= htmlspecialchars($migrationCredentials['superadmin_password']) ?></code></p>
+        <p class="subtitle">Admin: <strong><?= htmlspecialchars($migrationCredentials['admin_username']) ?></strong> / <code><?= htmlspecialchars($migrationCredentials['admin_password']) ?></code></p>
+        <p style="color:#f0ab00;font-size:.78rem;text-align:center">Simpan kredensial ini sekarang. Password hanya ditampilkan pada halaman ini.</p>
+        <?php endif; ?>
         <a href="<?= $base_url ?>/auth/login" class="btn btn-primary">Masuk ke Aplikasi</a>
 
     <?php endif; ?>

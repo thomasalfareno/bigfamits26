@@ -128,7 +128,7 @@ $canCreateGlobal = canCreateGlobalAgenda();
     </div>
 </div>
 
-<script>
+<script nonce="<?= $cspNonce ?>">
     let activeNoteId = <?= $active_note ? (int)$active_note['id_note'] : 'null' ?>;
     let hasUnsavedChanges = false;
     const canCreateGlobal = <?= $canCreateGlobal ? 'true' : 'false' ?>;

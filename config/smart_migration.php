@@ -7,6 +7,7 @@ require_once __DIR__ . '/migration_security.php';
 class SmartMigration
 {
     private PDO $conn;
+    private array $protectedSuperAdminUsernames;
     private array $log = [];
     private array $stats = [
         'tables_synced' => 0,
@@ -44,9 +45,13 @@ class SmartMigration
         '/^\s*EXECUTE\s+/i',
     ];
 
-    public function __construct(PDO $conn)
+    public function __construct(PDO $conn, array $protectedSuperAdminUsernames = [])
     {
         $this->conn = $conn;
+        $this->protectedSuperAdminUsernames = array_values(array_unique(array_map(
+            static fn($username) => strtolower(trim((string)$username)),
+            array_filter($protectedSuperAdminUsernames, static fn($username) => trim((string)$username) !== '')
+        )));
         $this->conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     }
 
@@ -435,10 +440,10 @@ class SmartMigration
             }
 
             if ($table === 'users') {
-                $sanitized = sanitizeMigrationUserRow($sourceCols, $values);
+                $sanitized = sanitizeMigrationUserRow($sourceCols, $values, $this->protectedSuperAdminUsernames);
                 if ($sanitized === null) {
                     $this->stats['rows_blocked']++;
-                    $this->addLog('warn', 'Baris user diblokir (superadmin/reserved username).');
+                    $this->addLog('warn', 'Baris user diblokir (akun istimewa atau username dilindungi).');
                     continue;
                 }
                 $values = applyMigrationUserCredentialNormalization($sourceCols, $sanitized);
@@ -628,28 +633,12 @@ class SmartMigration
         $stmt = $this->conn->query("SELECT id_user, username, password, plain_password, role FROM users");
         $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
         $normalized = 0;
-        $withPlain = 0;
-        $missingPlain = [];
 
         foreach ($users as $user) {
             $role = $user['role'] ?? 'user';
             $allowedRoles = ['user', 'operator', 'admin', 'superadmin'];
             if (!in_array($role, $allowedRoles, true)) {
                 $role = $this->mapLegacyRole($role);
-            }
-
-            $currentPlain = $user['plain_password'] ?? null;
-            if (
-                shouldStorePlainPassword($role)
-                && $currentPlain !== null
-                && $currentPlain !== ''
-                && !isEncryptedUserData($currentPlain)
-            ) {
-                $encryptedLegacyPlain = encryptUserData($currentPlain);
-                $this->conn->prepare('UPDATE users SET plain_password = ? WHERE id_user = ?')
-                    ->execute([$encryptedLegacyPlain, $user['id_user']]);
-                $user['plain_password'] = $encryptedLegacyPlain;
-                $normalized++;
             }
 
             $result = normalizeMigratedUserCredentials(
@@ -691,41 +680,16 @@ class SmartMigration
                 }
             }
 
-            if ($result['plain_password'] !== null && shouldStorePlainPassword($role)) {
-                $withPlain++;
-            } elseif (shouldStorePlainPassword($role)) {
-                $missingPlain[] = $user['username'] ?? ('id:' . $user['id_user']);
-            }
         }
 
         if ($normalized > 0) {
-            $this->addLog('ok', "$normalized akun dinormalisasi (password bcrypt + plain_password terenkripsi).");
+            $this->addLog('ok', "$normalized akun dinormalisasi ke password hash satu arah.");
         }
-        if ($withPlain > 0) {
-            $this->addLog('info', "$withPlain akun memiliki plain_password terenkripsi (aturan admin/register).");
-        }
-        if (!empty($missingPlain)) {
-            $this->addLog(
-                'warn',
-                count($missingPlain) . ' akun hanya punya bcrypt (plain_password NULL): ' .
-                implode(', ', array_slice($missingPlain, 0, 8)) .
-                (count($missingPlain) > 8 ? '…' : '') .
-                '. Akan terisi otomatis saat user login, atau reset password via admin.'
-            );
-        }
+        $this->conn->exec("UPDATE users SET plain_password = NULL");
 
-        $this->conn->exec("UPDATE users SET plain_password = NULL WHERE role = 'superadmin'");
-
-        $saConfig = getSuperAdminConfig();
-        $saUsername = strtolower($saConfig['username'] ?? 'addmbigfamits26');
-        $this->conn->prepare("UPDATE users SET role = 'operator' WHERE role = 'superadmin' AND LOWER(username) != ?")
-            ->execute([$saUsername]);
-
-        $reserved = getReservedSuperAdminUsernames();
-        foreach ($reserved as $reservedUser) {
-            $stmt = $this->conn->prepare("DELETE FROM users WHERE LOWER(username) = ? AND role != 'superadmin'");
-            $stmt->execute([strtolower($reservedUser)]);
-        }
+        // Existing privileged accounts are never demoted or deleted as a side
+        // effect of importing a backup. Imported privileged roles were already
+        // normalized by sanitizeMigrationUserRow().
     }
 
     private function mapLegacyRole(string $role): string

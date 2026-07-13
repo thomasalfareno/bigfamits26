@@ -217,7 +217,7 @@ require_once __DIR__ . '/../template/header.php';
     </div>
 </div>
 
-<script>
+<script nonce="<?= $cspNonce ?>">
     let lastMsgId = 0;
     let autoScroll = true;
     let totalUsersCount = 0;

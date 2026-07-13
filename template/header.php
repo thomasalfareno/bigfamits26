@@ -3,12 +3,29 @@
 require_once __DIR__ . '/../config/security.php';
 initSecureSession();
 setSecurityHeaders();
+$cspNonce = htmlspecialchars(getCspNonce(), ENT_QUOTES, 'UTF-8');
 
 $base_url = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME']));
 $base_url = preg_replace('/(\/(auth|dashboard|notes|msg|drive|calendar|server|admin|installer))?$/i', '', $base_url);
 if ($base_url === '/') $base_url = '';
 
-$current_page = basename($_SERVER['PHP_SELF']);
+$scriptName = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
+$current_page = basename($scriptName);
+$pageKey = basename($scriptName, '.php');
+if ($pageKey === 'index') {
+    $moduleKey = basename(dirname($scriptName));
+    if (in_array($moduleKey, ['admin', 'calendar', 'dashboard', 'drive', 'msg', 'notes', 'server'], true)) {
+        $pageKey = $moduleKey;
+    }
+}
+$allowedPageKeys = ['admin', 'calendar', 'dashboard', 'drive', 'error', 'index', 'login', 'msg', 'notes', 'pengaturan', 'preview', 'preview_word', 'register', 'server'];
+if (!in_array($pageKey, $allowedPageKeys, true)) {
+    $pageKey = 'index';
+}
+$sessionRole = $_SESSION['role'] ?? 'user';
+if (!in_array($sessionRole, ['user', 'operator', 'admin', 'superadmin'], true)) {
+    $sessionRole = 'user';
+}
 
 if (!file_exists(__DIR__ . '/../config/database.php')) {
     header("Location: $base_url/installer/");
@@ -59,10 +76,10 @@ $__userAvatar = !empty($_SESSION['foto_profil'])
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
-    <link rel="stylesheet" href="<?= $base_url ?>/assets/css/style.css?v=<?= @filemtime(__DIR__ . '/../assets/css/style.css') ?>">
+    <link rel="stylesheet" href="<?= $base_url ?>/assets/css/style.css?v=<?= assetVersion(__DIR__ . '/../assets/css/style.css') ?>">
     <!-- SweetAlert2 -->
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script>
+    <script nonce="<?= $cspNonce ?>" src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script nonce="<?= $cspNonce ?>">
         // Setup CSRF header for all fetch requests automatically
         const originalFetch = window.fetch;
         window.fetch = function(url, options = {}) {
@@ -79,8 +96,8 @@ $__userAvatar = !empty($_SESSION['foto_profil'])
         };
     </script>
 </head>
-<body data-page="<?= basename($_SERVER['PHP_SELF'], '.php') ?>" data-role="<?= $_SESSION['role'] ?? '' ?>">
-    <script>
+<body data-page="<?= htmlspecialchars($pageKey, ENT_QUOTES, 'UTF-8') ?>" data-role="<?= htmlspecialchars($sessionRole, ENT_QUOTES, 'UTF-8') ?>">
+    <script nonce="<?= $cspNonce ?>">
         if (localStorage.getItem('sidebar-minimized') === '1' && window.innerWidth >= 992) {
             document.body.classList.add('sidebar-minimized');
         }

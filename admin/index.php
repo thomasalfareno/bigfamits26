@@ -52,8 +52,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
         if (empty($nama) || empty($username) || empty($password)) {
             $redirectAdminFlash(null, 'Semua kolom wajib diisi!');
-        } elseif (strlen($password) < 6) {
-            $redirectAdminFlash(null, 'Password minimal 6 karakter.');
+        } elseif (!isStrongPassword($password)) {
+            $redirectAdminFlash(null, 'Password minimal 8 karakter.');
         } elseif (($_SESSION['role'] ?? '') === 'operator' && !in_array($role, ['user', 'operator'])) {
             $redirectAdminFlash(null, 'Operator hanya diperbolehkan membuat user dengan role User atau Operator.');
         } elseif ($role === 'superadmin' && !$isSuperAdmin) {
@@ -75,9 +75,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
 
             $hashed = password_hash($password, PASSWORD_DEFAULT);
-            $plain = shouldStorePlainPassword($role) ? encryptUserData($password) : null;
-            $stmt = $conn->prepare("INSERT INTO users (nama, username, password, plain_password, role) VALUES (?, ?, ?, ?, ?)");
-            $stmt->execute([$nama, $username, $hashed, $plain, $role]);
+            $stmt = $conn->prepare("INSERT INTO users (nama, username, password, plain_password, role) VALUES (?, ?, ?, NULL, ?)");
+            $stmt->execute([$nama, $username, $hashed, $role]);
             $redirectAdminFlash("User baru '$nama' berhasil dibuat!");
         } catch (Exception $e) {
             $redirectAdminFlash(null, safeErrorMessage($e, 'Gagal membuat user baru.'));
@@ -119,8 +118,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
         if (empty($password_baru)) {
             $redirectAdminFlash(null, 'Password baru wajib diisi!');
-        } elseif (strlen($password_baru) < 6) {
-            $redirectAdminFlash(null, 'Password baru minimal 6 karakter.');
+        } elseif (!isStrongPassword($password_baru)) {
+            $redirectAdminFlash(null, 'Password baru minimal 8 karakter.');
         } elseif (($_SESSION['role'] ?? '') === 'operator' && empty($operator_password)) {
             $redirectAdminFlash(null, 'Operator wajib memasukkan password miliknya untuk konfirmasi!');
         } elseif (($_SESSION['role'] ?? '') === 'admin' && empty($admin_password)) {
@@ -159,14 +158,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 }
 
                 $hashed = password_hash($password_baru, PASSWORD_DEFAULT);
-                if (shouldStorePlainPassword($target_user_role)) {
-                    $encrypted_plain = encryptUserData($password_baru);
-                    $stmt = $conn->prepare("UPDATE users SET password = ?, plain_password = ? WHERE id_user = ?");
-                    $stmt->execute([$hashed, $encrypted_plain, $id_user]);
-                } else {
-                    $stmt = $conn->prepare("UPDATE users SET password = ?, plain_password = NULL WHERE id_user = ?");
-                    $stmt->execute([$hashed, $id_user]);
-                }
+                $stmt = $conn->prepare("UPDATE users SET password = ?, plain_password = NULL WHERE id_user = ?");
+                $stmt->execute([$hashed, $id_user]);
                 $redirectAdminFlash('Password user berhasil direset!');
             }
         } catch (Exception $e) {
@@ -194,7 +187,7 @@ if (!in_array($_SESSION['role'] ?? '', ['admin', 'operator', 'superadmin'])) {
 $users = [];
 try {
     if ($isSuperAdmin) {
-        $stmt_u = $conn->prepare("SELECT id_user, nama, username, role, foto_profil, last_online, is_online, created_at, plain_password FROM users WHERE id_user != ? AND role != 'superadmin' ORDER BY role ASC, nama ASC");
+        $stmt_u = $conn->prepare("SELECT id_user, nama, username, role, foto_profil, last_online, is_online, created_at FROM users WHERE id_user != ? AND role != 'superadmin' ORDER BY role ASC, nama ASC");
         $stmt_u->execute([$_SESSION['id_user']]);
         $users = $stmt_u->fetchAll();
     } else {
@@ -233,7 +226,6 @@ try {
                         <th style="padding: 12px 8px;">Nama</th>
                         <?php if ($isSuperAdmin): ?>
                             <th style="padding: 12px 8px;">Username</th>
-                            <th style="padding: 12px 8px;">Password</th>
                         <?php endif; ?>
                         <th style="padding: 12px 8px;">Role</th>
                         <th style="padding: 12px 8px;">Bergabung</th>
@@ -253,9 +245,6 @@ try {
                             <td style="padding: 12px 8px; font-weight:600; color:#fff"><?= htmlspecialchars($u['nama']) ?></td>
                             <?php if ($isSuperAdmin): ?>
                                 <td style="padding: 12px 8px; color:var(--text-muted)"><?= htmlspecialchars($u['username']) ?></td>
-                                <td style="padding: 12px 8px; font-family: monospace; color:#58a6ff">
-                                    <?= htmlspecialchars(decryptUserData($u['plain_password']) ?? '(Belum Terisi/Hashed)') ?>
-                                </td>
                             <?php endif; ?>
                             <td style="padding: 12px 8px;">
                                 <span class="badge <?= $u['role'] === 'superadmin' ? 'badge-danger' : ($u['role'] === 'admin' ? 'badge-danger' : ($u['role'] === 'operator' ? 'badge-info' : 'badge-success')) ?>">
@@ -310,7 +299,7 @@ try {
                 </div>
                 <div class="form-group" style="margin-bottom:1rem">
                     <label style="color:var(--text-muted); display:block; font-size:0.85rem; margin-bottom:0.4rem">Password</label>
-                    <input type="password" name="password" class="form-control" placeholder="Password minimal 6 karakter..." minlength="6" required>
+                    <input type="password" name="password" class="form-control" placeholder="Minimal 8 karakter" minlength="8" required>
                 </div>
                 <div class="form-group">
                     <label style="color:var(--text-muted); display:block; font-size:0.85rem; margin-bottom:0.4rem">Role</label>
@@ -356,7 +345,7 @@ try {
                 <?php endif; ?>
                 <div class="form-group">
                     <label style="color:var(--text-muted); display:block; font-size:0.85rem; margin-bottom:0.4rem">Password Baru</label>
-                    <input type="password" name="password_baru" class="form-control" placeholder="Masukkan password baru (minimal 6 karakter)..." minlength="6" required>
+                    <input type="password" name="password_baru" class="form-control" placeholder="Minimal 8 karakter" minlength="8" required>
                 </div>
             </div>
             <div class="modal-footer">
@@ -420,7 +409,7 @@ try {
     </div>
 </div>
 
-<script>
+<script nonce="<?= $cspNonce ?>">
     const isSuperAdmin = <?= $isSuperAdmin ? 'true' : 'false' ?>;
 
     function openNewUserModal() { document.getElementById('newUserModal').classList.add('open'); }
@@ -585,8 +574,7 @@ try {
                         
                         if (isSuperAdmin) {
                             html += `
-                            <td style="padding: 12px 8px; color:var(--text-muted)">${u.username || ''}</td>
-                            <td style="padding: 12px 8px; font-family: monospace; color:#58a6ff">${u.plain_password || ''}</td>`;
+                            <td style="padding: 12px 8px; color:var(--text-muted)">${u.username || ''}</td>`;
                         }
 
                         html += `

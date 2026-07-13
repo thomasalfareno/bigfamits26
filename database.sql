@@ -31,7 +31,9 @@ CREATE TABLE IF NOT EXISTS `notes` (
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id_note`),
-  KEY `id_user` (`id_user`),
+  KEY `idx_notes_user_updated` (`id_user`,`updated_at`),
+  KEY `idx_notes_global_date_updated` (`is_global`,`tanggal_kegiatan`,`updated_at`),
+  KEY `idx_notes_user_global_date` (`id_user`,`is_global`,`tanggal_kegiatan`),
   CONSTRAINT `fk_notes_user` FOREIGN KEY (`id_user`) REFERENCES `users` (`id_user`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -62,6 +64,7 @@ CREATE TABLE IF NOT EXISTS `msg` (
   PRIMARY KEY (`id_msg`),
   KEY `id_user` (`id_user`),
   KEY `id_poll` (`id_poll`),
+  KEY `idx_msg_pinned_id` (`pinned`,`id_msg`),
   CONSTRAINT `fk_msg_user` FOREIGN KEY (`id_user`) REFERENCES `users` (`id_user`) ON DELETE CASCADE,
   CONSTRAINT `fk_msg_poll` FOREIGN KEY (`id_poll`) REFERENCES `polls` (`id_poll`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -72,6 +75,7 @@ CREATE TABLE IF NOT EXISTS `msg_deleted` (
   `id_user` int(11) NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `unique_del` (`id_msg`,`id_user`),
+  KEY `idx_msg_deleted_user_msg` (`id_user`,`id_msg`),
   CONSTRAINT `fk_del_msg` FOREIGN KEY (`id_msg`) REFERENCES `msg` (`id_msg`) ON DELETE CASCADE,
   CONSTRAINT `fk_del_user` FOREIGN KEY (`id_user`) REFERENCES `users` (`id_user`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -121,6 +125,7 @@ CREATE TABLE IF NOT EXISTS `poll_votes` (
   `id_user` int(11) NOT NULL,
   PRIMARY KEY (`id_vote`),
   UNIQUE KEY `unique_vote` (`id_poll`,`id_option`,`id_user`),
+  KEY `idx_poll_votes_poll_user` (`id_poll`,`id_user`),
   CONSTRAINT `fk_vote_poll` FOREIGN KEY (`id_poll`) REFERENCES `polls` (`id_poll`) ON DELETE CASCADE,
   CONSTRAINT `fk_vote_option` FOREIGN KEY (`id_option`) REFERENCES `poll_options` (`id_option`) ON DELETE CASCADE,
   CONSTRAINT `fk_vote_user` FOREIGN KEY (`id_user`) REFERENCES `users` (`id_user`) ON DELETE CASCADE
@@ -129,13 +134,12 @@ CREATE TABLE IF NOT EXISTS `poll_votes` (
 CREATE TABLE IF NOT EXISTS `settings` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `site_title` varchar(255) DEFAULT 'BIG FAMILY ITS 26',
-  `site_description` text DEFAULT 'Platform Kolaborasi Mahasiswa ITS 26',
+  `site_description` text,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 INSERT INTO `settings` (`id`, `site_title`, `site_description`) VALUES (1, 'BIG FAMILY ITS 26', 'Platform Kolaborasi Mahasiswa ITS 26');
 
--- System Admin
-INSERT INTO `users` (`nama`, `username`, `password`, `role`) VALUES ('System', 'addmbigfamits26', '$2y$10$fBBNXBBzvYeCGdmA8VeeO.8O0ni7TdBWvC6TVYH/v1bcbKrLVGf7q', 'superadmin');
+-- Initial Admin and Super Admin credentials are entered manually in installer/index.php.
 
 COMMIT;

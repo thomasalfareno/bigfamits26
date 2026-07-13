@@ -234,7 +234,7 @@ $canCreateGlobal = canCreateGlobalAgenda();
     </div>
 </div>
 
-<script>
+<script nonce="<?= $cspNonce ?>">
     let activeDayDate = '';
     let currentEditingNote = null;
     let calendarAutosaveTimeout = null;
