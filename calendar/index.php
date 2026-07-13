@@ -98,11 +98,11 @@ $canCreateGlobal = canCreateGlobalAgenda();
 
                 <!-- Navigation arrows -->
                 <div style="display:flex; border:1px solid var(--border-color); border-radius:8px; overflow:hidden">
-                    <a href="?year=<?= $month == 1 ? $year-1 : $year ?>&month=<?= $month == 1 ? 12 : $month-1 ?>&mode=<?= $mode ?>" class="btn btn-secondary" style="border:none; border-radius:0; padding:0.6rem 0.9rem"><i class="fas fa-chevron-left"></i></a>
+                    <a href="?year=<?= $month == 1 ? $year-1 : $year ?>&month=<?= $month == 1 ? 12 : $month-1 ?>&mode=<?= $mode ?>" class="btn btn-secondary" style="border:none; border-radius:0; padding:0.6rem 0.9rem" aria-label="Bulan sebelumnya" title="Bulan sebelumnya"><i class="fas fa-chevron-left"></i></a>
                     <div style="background:var(--card-bg); display:flex; align-items:center; padding:0 1rem; font-weight:700; color:#fff; font-size:0.9rem; min-width:140px; justify-content:center">
                         <?= $indo_month_name ?>
                     </div>
-                    <a href="?year=<?= $month == 12 ? $year+1 : $year ?>&month=<?= $month == 12 ? 1 : $month+1 ?>&mode=<?= $mode ?>" class="btn btn-secondary" style="border:none; border-radius:0; padding:0.6rem 0.9rem"><i class="fas fa-chevron-right"></i></a>
+                    <a href="?year=<?= $month == 12 ? $year+1 : $year ?>&month=<?= $month == 12 ? 1 : $month+1 ?>&mode=<?= $mode ?>" class="btn btn-secondary" style="border:none; border-radius:0; padding:0.6rem 0.9rem" aria-label="Bulan berikutnya" title="Bulan berikutnya"><i class="fas fa-chevron-right"></i></a>
                 </div>
             </div>
         </div>
@@ -171,7 +171,7 @@ $canCreateGlobal = canCreateGlobalAgenda();
     <div class="modal-dialog" style="max-width: 420px;">
         <div class="modal-header">
             <h3>Agenda Tanggal: <span id="lblDayModalTitle" class="text-accent"></span></h3>
-            <button class="modal-close" onclick="closeDayModal()"><i class="fas fa-times"></i></button>
+            <button class="modal-close" onclick="closeDayModal()" aria-label="Tutup agenda tanggal" title="Tutup agenda tanggal"><i class="fas fa-times"></i></button>
         </div>
         <div class="modal-body">
             <div id="dayAgendaListContainer" style="display:flex; flex-direction:column; gap:8px; margin-bottom:1.25rem; max-height:220px; overflow-y:auto">
@@ -187,7 +187,7 @@ $canCreateGlobal = canCreateGlobalAgenda();
     <div class="modal-dialog" style="max-width: 700px; display:flex; flex-direction:column; max-height:90vh;">
         <div class="modal-header">
             <h3>Edit Agenda & Catatan</h3>
-            <button class="modal-close" onclick="closeEditAgendaModal()"><i class="fas fa-times"></i></button>
+            <button class="modal-close" onclick="closeEditAgendaModal()" aria-label="Tutup form agenda" title="Tutup form agenda"><i class="fas fa-times"></i></button>
         </div>
         <div class="modal-body" style="overflow-y:auto; display:flex; flex-direction:column; gap:12px; height: 100%;">
             <div style="display:flex; justify-content:space-between; align-items:center">

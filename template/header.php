@@ -157,9 +157,9 @@ $__userAvatar = !empty($_SESSION['foto_profil'])
             <a href="javascript:void(0)" class="sidebar-link" onclick="startTutorial()" title="Buka Panduan Tutorial">
                 <i class="fas fa-circle-question"></i><span>Panduan Tutorial</span>
             </a>
-            <a href="javascript:void(0)" class="sidebar-link sidebar-logout" onclick="confirmLogout()">
+            <button type="button" id="logoutTrigger" class="sidebar-link sidebar-logout">
                 <i class="fas fa-sign-out-alt"></i><span>Keluar</span>
-            </a>
+            </button>
         </nav>
 
         <div class="sidebar-user">
@@ -173,17 +173,30 @@ $__userAvatar = !empty($_SESSION['foto_profil'])
         </div>
     </aside>
 
+    <dialog id="logoutDialog" class="logout-dialog" aria-labelledby="logoutDialogTitle" aria-describedby="logoutDialogDescription">
+        <div class="logout-dialog-content">
+            <div class="logout-dialog-icon" aria-hidden="true"><i class="fas fa-sign-out-alt"></i></div>
+            <h2 id="logoutDialogTitle">Keluar dari akun?</h2>
+            <p id="logoutDialogDescription">Sesi Anda akan diakhiri dan Anda perlu masuk kembali untuk mengakses aplikasi.</p>
+            <form method="POST" action="<?= $base_url ?>/auth/logout" class="logout-dialog-actions">
+                <input type="hidden" name="_csrf_token" value="<?= htmlspecialchars(generateCsrfToken(), ENT_QUOTES, 'UTF-8') ?>">
+                <button type="button" id="logoutCancelButton" class="btn btn-secondary">Batal</button>
+                <button type="submit" class="btn btn-danger"><i class="fas fa-sign-out-alt"></i> Ya, Keluar</button>
+            </form>
+        </div>
+    </dialog>
+
     <!-- Topbar -->
     <nav class="topbar">
-        <button class="topbar-toggle" id="sidebarToggle"><i class="fas fa-bars"></i></button>
+        <button class="topbar-toggle" id="sidebarToggle" aria-label="Buka menu navigasi" title="Buka menu navigasi"><i class="fas fa-bars"></i></button>
         <div class="topbar-brand">
             <img src="<?= $base_url ?>/assets/logo.jpeg" alt="" class="topbar-logo">
             <span><?= htmlspecialchars($app_settings['site_title']) ?></span>
         </div>
         <div class="topbar-actions">
-            <div class="topbar-user" onclick="document.getElementById('sidebarToggle').click()">
+            <button type="button" class="topbar-user" aria-label="Buka menu pengguna" title="Buka menu pengguna" onclick="document.getElementById('sidebarToggle').click()">
                 <img src="<?= $__userAvatar ?>" alt="">
-            </div>
+            </button>
         </div>
     </nav>
 

@@ -264,7 +264,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     <div class="modal-dialog" style="max-width: 450px;">
         <div class="modal-header">
             <h3>Sesuaikan Foto</h3>
-            <button class="modal-close" onclick="closeCropper()"><i class="fas fa-times"></i></button>
+            <button class="modal-close" onclick="closeCropper()" aria-label="Tutup penyesuaian foto" title="Tutup penyesuaian foto"><i class="fas fa-times"></i></button>
         </div>
         <div class="modal-body">
             <div class="cropper-container-wrapper">

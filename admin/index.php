@@ -265,7 +265,7 @@ try {
                                         
                                         <?php if ($u['id_user'] !== (int)$_SESSION['id_user']): ?>
                                             <button class="btn btn-secondary" style="padding:0.4rem 0.8rem; font-size:0.75rem" onclick="openRoleModal(<?= $u['id_user'] ?>, '<?= $u['role'] ?>')"><i class="fas fa-user-edit"></i> Edit Role</button>
-                                            <button class="btn btn-danger" style="padding:0.4rem 0.8rem; font-size:0.75rem" onclick="deleteUser(<?= $u['id_user'] ?>)"><i class="fas fa-trash-alt"></i></button>
+                                            <button class="btn btn-danger" style="padding:0.4rem 0.8rem; font-size:0.75rem" onclick="deleteUser(<?= $u['id_user'] ?>)" aria-label="Hapus pengguna <?= htmlspecialchars($u['nama'], ENT_QUOTES, 'UTF-8') ?>" title="Hapus pengguna <?= htmlspecialchars($u['nama'], ENT_QUOTES, 'UTF-8') ?>"><i class="fas fa-trash-alt"></i></button>
                                         <?php endif; ?>
                                     <?php endif; ?>
                                 </div>
@@ -283,7 +283,7 @@ try {
     <div class="modal-dialog" style="max-width: 400px;">
         <div class="modal-header">
             <h3>Tambah Pengguna Baru</h3>
-            <button class="modal-close" onclick="closeNewUserModal()"><i class="fas fa-times"></i></button>
+            <button class="modal-close" onclick="closeNewUserModal()" aria-label="Tutup form pengguna baru" title="Tutup form pengguna baru"><i class="fas fa-times"></i></button>
         </div>
         <form method="POST">
             <input type="hidden" name="_csrf_token" value="<?= generateCsrfToken() ?>">
@@ -325,7 +325,7 @@ try {
     <div class="modal-dialog" style="max-width: 400px;">
         <div class="modal-header">
             <h3>Reset Password — <span id="resetName"></span></h3>
-            <button class="modal-close" onclick="closeResetModal()"><i class="fas fa-times"></i></button>
+            <button class="modal-close" onclick="closeResetModal()" aria-label="Tutup reset password" title="Tutup reset password"><i class="fas fa-times"></i></button>
         </div>
         <form method="POST">
             <input type="hidden" name="_csrf_token" value="<?= generateCsrfToken() ?>">
@@ -361,7 +361,7 @@ try {
     <div class="modal-dialog" style="max-width: 400px;">
         <div class="modal-header">
             <h3>Edit Role</h3>
-            <button class="modal-close" onclick="closeRoleModal()"><i class="fas fa-times"></i></button>
+            <button class="modal-close" onclick="closeRoleModal()" aria-label="Tutup edit role" title="Tutup edit role"><i class="fas fa-times"></i></button>
         </div>
         <form method="POST">
             <input type="hidden" name="_csrf_token" value="<?= generateCsrfToken() ?>">
@@ -392,7 +392,7 @@ try {
     <div class="modal-dialog" style="max-width: 650px; display:flex; flex-direction:column; max-height:85vh;">
         <div class="modal-header">
             <h3>Daftar Catatan — <span id="notesOwnerName"></span></h3>
-            <button class="modal-close" onclick="closeUserNotesModal()"><i class="fas fa-times"></i></button>
+            <button class="modal-close" onclick="closeUserNotesModal()" aria-label="Tutup daftar catatan" title="Tutup daftar catatan"><i class="fas fa-times"></i></button>
         </div>
         <div class="modal-body" style="overflow-y:auto; display:flex; gap:15px; height: 350px;">
             <div style="width: 220px; border-right: 1px solid var(--border-color); padding-right:15px; overflow-y:auto; display:flex; flex-direction:column; gap:4px;" id="userNotesList">
@@ -558,6 +558,7 @@ try {
                     const currentUserId = <?= (int)$_SESSION['id_user'] ?>;
                     
                     data.users.forEach(u => {
+                        const safeActionName = escapeHTML(u.nama || '');
                         const avatar = u.foto_profil
                             ? `../uploads/profil/${u.foto_profil}`
                             : `https://ui-avatars.com/api/?name=${encodeURIComponent(u.nama)}&background=1f6feb&color=fff&size=80`;
@@ -599,7 +600,7 @@ try {
                             if (u.id_user !== currentUserId) {
                                 html += `
                                     <button class="btn btn-secondary" style="padding:0.4rem 0.8rem; font-size:0.75rem" onclick="openRoleModal(${u.id_user}, '${u.role}')"><i class="fas fa-user-edit"></i> Edit Role</button>
-                                    <button class="btn btn-danger" style="padding:0.4rem 0.8rem; font-size:0.75rem" onclick="deleteUser(${u.id_user})"><i class="fas fa-trash-alt"></i></button>`;
+                                    <button class="btn btn-danger" style="padding:0.4rem 0.8rem; font-size:0.75rem" onclick="deleteUser(${u.id_user})" aria-label="Hapus pengguna ${safeActionName}" title="Hapus pengguna ${safeActionName}"><i class="fas fa-trash-alt"></i></button>`;
                             }
                         }
 

@@ -66,7 +66,7 @@ require_once __DIR__ . '/../template/header.php';
     <div class="modal-dialog" style="max-width: 500px; background:#0d1117; max-height: 90vh; display: flex; flex-direction: column;">
         <div class="modal-header" style="border-bottom:none; flex-shrink:0">
             <h3 style="font-size:1.1rem; font-weight:600"><i class="fas fa-cloud-arrow-up" style="margin-right:6px"></i> Kirim File <span id="msgUploadCountBadge" class="badge badge-info" style="font-size:0.75rem; margin-left:6px"></span></h3>
-            <button class="modal-close" onclick="cancelUploadPreview()"><i class="fas fa-times"></i></button>
+            <button class="modal-close" onclick="cancelUploadPreview()" aria-label="Tutup pratinjau upload" title="Tutup pratinjau upload"><i class="fas fa-times"></i></button>
         </div>
         <div class="modal-body" style="padding:1.25rem; overflow-y: auto; flex: 1; min-height: 0;">
             <div id="msgUploadFileListContainer" style="display:flex; flex-direction:column; gap:8px">
@@ -88,7 +88,7 @@ require_once __DIR__ . '/../template/header.php';
     <div class="modal-dialog" style="max-width: 700px; background:#0d1117">
         <div class="modal-header" style="border-bottom:none">
             <h3 id="mediaPreviewTitle" style="font-size:0.95rem; font-weight:500">Pratinjau File</h3>
-            <button class="modal-close" onclick="closeMediaPreview()"><i class="fas fa-times"></i></button>
+            <button class="modal-close" onclick="closeMediaPreview()" aria-label="Tutup pratinjau file" title="Tutup pratinjau file"><i class="fas fa-times"></i></button>
         </div>
         <div class="modal-body" style="text-align:center; padding:1.5rem">
             <div id="mediaPreviewContent" style="display:flex; justify-content:center; align-items:center; min-height:200px">
@@ -107,7 +107,7 @@ require_once __DIR__ . '/../template/header.php';
     <div class="modal-dialog" style="max-width: 450px; max-height: 90vh; display: flex; flex-direction: column;">
         <div class="modal-header">
             <h3>Buat Polling Baru</h3>
-            <button class="modal-close" onclick="closePollModal()"><i class="fas fa-times"></i></button>
+            <button class="modal-close" onclick="closePollModal()" aria-label="Tutup form polling" title="Tutup form polling"><i class="fas fa-times"></i></button>
         </div>
         <form onsubmit="submitMsgPoll(event)" style="display: flex; flex-direction: column; overflow: hidden; height: 100%;">
             <div class="modal-body" style="overflow-y: auto; flex: 1; min-height: 0;">
@@ -188,7 +188,7 @@ require_once __DIR__ . '/../template/header.php';
     <div class="modal-dialog" style="max-width: 400px; background:#0d1117">
         <div class="modal-header">
             <h3>Info Detail Pesan</h3>
-            <button class="modal-close" onclick="closeReadDetailsModal()"><i class="fas fa-times"></i></button>
+            <button class="modal-close" onclick="closeReadDetailsModal()" aria-label="Tutup detail pesan" title="Tutup detail pesan"><i class="fas fa-times"></i></button>
         </div>
         <div class="modal-body" style="padding:1.25rem; max-height:350px; overflow-y:auto">
             <h4 style="font-size:0.8rem; text-transform:uppercase; color:var(--text-muted); margin-bottom:10px; font-weight:600">Dibaca Oleh:</h4>

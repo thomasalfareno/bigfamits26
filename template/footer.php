@@ -25,24 +25,32 @@
             link.addEventListener('click', () => { if (window.innerWidth < 992) closeSidebar(); });
         });
 
-        // Confirm logout
-        function confirmLogout() {
-            Swal.fire({
-                title: 'Keluar?',
-                text: 'Yakin ingin keluar dari akun?',
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonText: 'Ya, Keluar',
-                cancelButtonText: 'Batal',
-                confirmButtonColor: '#f85149',
-                background: '#161b22',
-                color: '#c9d1d9'
-            }).then(result => {
-                if (result.isConfirmed) {
-                    window.location.href = '<?= $base_url ?>/auth/logout';
-                }
-            });
+        // Accessible, dependency-free logout confirmation.
+        const logoutTrigger = document.getElementById('logoutTrigger');
+        const logoutDialog = document.getElementById('logoutDialog');
+        const logoutCancelButton = document.getElementById('logoutCancelButton');
+        let logoutPreviousFocus = null;
+
+        function closeLogoutDialog() {
+            if (logoutDialog?.open) logoutDialog.close();
+            logoutPreviousFocus?.focus();
         }
+
+        logoutTrigger?.addEventListener('click', () => {
+            logoutPreviousFocus = document.activeElement;
+            if (typeof logoutDialog?.showModal === 'function') {
+                logoutDialog.showModal();
+                logoutCancelButton?.focus();
+            }
+        });
+        logoutCancelButton?.addEventListener('click', closeLogoutDialog);
+        logoutDialog?.addEventListener('cancel', event => {
+            event.preventDefault();
+            closeLogoutDialog();
+        });
+        logoutDialog?.addEventListener('click', event => {
+            if (event.target === logoutDialog) closeLogoutDialog();
+        });
 
         // Toast helper
         function showToast(msg, icon = 'success') {

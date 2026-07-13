@@ -382,7 +382,7 @@ require_once __DIR__ . '/view_data.php';
     <div class="modal-dialog" style="max-width: 400px;">
         <div class="modal-header">
             <h3>Folder Baru</h3>
-            <button class="modal-close" onclick="closeFolderModal()"><i class="fas fa-times"></i></button>
+            <button class="modal-close" onclick="closeFolderModal()" aria-label="Tutup form folder" title="Tutup form folder"><i class="fas fa-times"></i></button>
         </div>
         <div class="modal-body">
             <div class="form-group">
@@ -402,7 +402,7 @@ require_once __DIR__ . '/view_data.php';
     <div class="modal-dialog" style="max-width: 400px;">
         <div class="modal-header">
             <h3>Detail Folder</h3>
-            <button class="modal-close" onclick="closeFolderDetailModal()"><i class="fas fa-times"></i></button>
+            <button class="modal-close" onclick="closeFolderDetailModal()" aria-label="Tutup detail folder" title="Tutup detail folder"><i class="fas fa-times"></i></button>
         </div>
         <div class="modal-body" style="color:var(--text-color); font-size:0.9rem">
             <p style="margin-bottom:8px"><strong>Nama Folder:</strong> <span id="lblFolderName"></span></p>
@@ -420,7 +420,7 @@ require_once __DIR__ . '/view_data.php';
     <div class="modal-dialog" style="max-width: 480px; max-height: 90vh; display: flex; flex-direction: column;">
         <div class="modal-header" style="flex-shrink:0">
             <h3><i class="fas fa-cloud-arrow-up" style="margin-right:6px"></i> Konfirmasi Upload <span id="lblUploadCount" class="badge badge-info" style="font-size:0.75rem; margin-left:6px"></span></h3>
-            <button class="modal-close" onclick="closeUploadPreviewModal()"><i class="fas fa-times"></i></button>
+            <button class="modal-close" onclick="closeUploadPreviewModal()" aria-label="Tutup konfirmasi upload" title="Tutup konfirmasi upload"><i class="fas fa-times"></i></button>
         </div>
         <div class="modal-body" style="padding:1.25rem; overflow-y: auto; flex: 1; min-height: 0;">
             <div id="uploadFileListContainer" style="display:flex; flex-direction:column; gap:8px">
@@ -439,7 +439,7 @@ require_once __DIR__ . '/view_data.php';
     <div class="modal-dialog" style="max-width: 700px; max-height: 90vh; display: flex; flex-direction: column;">
         <div class="modal-header" style="flex-shrink:0">
             <h3 id="previewFileName">Nama File</h3>
-            <button class="modal-close" onclick="closeFilePreviewModal()"><i class="fas fa-times"></i></button>
+            <button class="modal-close" onclick="closeFilePreviewModal()" aria-label="Tutup pratinjau file" title="Tutup pratinjau file"><i class="fas fa-times"></i></button>
         </div>
         <div class="modal-body" style="padding:1.25rem; overflow-y: auto; flex: 1; min-height: 0;">
             <div id="previewMediaBox" style="display:flex; justify-content:center; align-items:center; background:#0d1117; min-height:120px; max-height:55vh; border-radius:8px; margin-bottom:1.25rem; overflow:auto">
@@ -463,7 +463,7 @@ require_once __DIR__ . '/view_data.php';
     <div class="modal-dialog" style="max-width: 460px;">
         <div class="modal-header">
             <h3><i class="fas fa-arrows-up-down-left-right" style="margin-right:6px"></i> Pindahkan</h3>
-            <button class="modal-close" onclick="closeMoveModal()"><i class="fas fa-times"></i></button>
+            <button class="modal-close" onclick="closeMoveModal()" aria-label="Tutup dialog pindahkan" title="Tutup dialog pindahkan"><i class="fas fa-times"></i></button>
         </div>
         <div class="modal-body">
             <p id="moveItemLabel" style="font-size:0.85rem; color:var(--text-muted); margin-bottom:12px"></p>
